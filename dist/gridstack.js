@@ -399,8 +399,7 @@
     };
     GridStackEngine.prototype.cleanOrphanClones = function() {
         var orphans = _.remove(this.nodes, function (node) {
-            return node.el.hasClass(phocas.views.dashboard.constants.WIDGET_CLONE_CLASS)
-                || node.el.hasClass(phocas.views.dashboard.constants.GRID_WIDGET_CLONE_CLASS);
+            return !node.el || node.el.hasClass(phocas.views.dashboard.constants.WIDGET_CLONE_CLASS) || node.el.hasClass(phocas.views.dashboard.constants.GRID_WIDGET_CLONE_CLASS);
         });
     };
 
@@ -734,11 +733,13 @@
                         n.el.remove();
                     }
                 } else {
-                    n.el
-                        .attr('data-gs-x', n.x)
-                        .attr('data-gs-y', n.y)
-                        .attr('data-gs-width', n.width)
-                        .attr('data-gs-height', n.height);
+                    if(n.el){
+                        n.el
+                            .attr('data-gs-x', n.x)
+                            .attr('data-gs-y', n.y)
+                            .attr('data-gs-width', n.width)
+                            .attr('data-gs-height', n.height);
+                    }
                 }
             });
             self._updateStyles(maxHeight + 10);
@@ -1135,6 +1136,8 @@
     };
 
     GridStack.prototype._clearRemovingTimeout = function(el) {
+        if(el === null || typeof el === "undefined"){ return; }
+
         var node = $(el).data('_gridstack_node');
 
         if (!node._removeTimeout) {
