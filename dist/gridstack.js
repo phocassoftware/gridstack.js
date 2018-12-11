@@ -4,7 +4,7 @@
  * (c) 2014-2018 Pavel Reznikov, Dylan Weiss
  * gridstack.js may be freely distributed under the MIT license.
  * @preserve
- */
+*/
 (function(factory) {
     if (typeof define === 'function' && define.amd) {
         define(['jquery', 'lodash'], factory);
@@ -22,7 +22,7 @@
     var obsolete = function(f, oldName, newName) {
         var wrapper = function() {
             console.warn('gridstack.js: Function `' + oldName + '` is deprecated as of v0.2.5 and has been replaced ' +
-                'with `' + newName + '`. It will be **completely** removed in v1.0.');
+            'with `' + newName + '`. It will be **completely** removed in v1.0.');
             return f.apply(this, arguments);
         };
         wrapper.prototype = f.prototype;
@@ -185,9 +185,9 @@
     // jscs:enable requireCamelCaseOrUpperCaseIdentifiers
 
     /**
-     * @class GridStackDragDropPlugin
-     * Base class for drag'n'drop plugin.
-     */
+    * @class GridStackDragDropPlugin
+    * Base class for drag'n'drop plugin.
+    */
     function GridStackDragDropPlugin(grid) {
         this.grid = grid;
     }
@@ -262,7 +262,7 @@
         var nn = node;
         var hasLocked = Boolean(_.find(this.nodes, function(n) { return n.locked; }));
         if (!this.float && !hasLocked) {
-            nn = {x: node.x, y: node.y, width: this.width, height: node.height};
+            nn = {x: 0, y: node.y, width: this.width, height: node.height};
         }
         while (true) {
             var collisionNode = _.find(this.nodes, _.bind(Utils._collisionNodeCheck, {node: node, nn: nn}));
@@ -283,9 +283,7 @@
     };
 
     GridStackEngine.prototype._sortNodes = function(dir) {
-        //Phocas change: we sort by X then Y, this makes it easier to persist the widget.Position property
-        this.nodes.sort(phocas.views.dashboard.line.gridLineUtils.sortByXY)
-        //this.nodes = Utils.sort(this.nodes, dir, this.width);
+        this.nodes = Utils.sort(this.nodes, dir, this.width);
     };
 
     GridStackEngine.prototype._packNodes = function() {
@@ -320,11 +318,13 @@
                     var newY = n.y - 1;
                     var canBeMoved = i === 0;
 
-                    // Phocas change
-                    var otherNodes = _.without(this.nodes, n);
-                    var anyCollided = _.find(otherNodes, _.bind(Utils._didCollide, { n: n, newY: newY }));
-                    canBeMoved = is.undefined(anyCollided);
-                    // End Phocas change
+                    if (i > 0) {
+                        var collisionNode = _.chain(this.nodes)
+                            .take(i)
+                            .find(_.bind(Utils._didCollide, {n: n, newY: newY}))
+                            .value();
+                        canBeMoved = typeof collisionNode == 'undefined';
+                    }
 
                     if (!canBeMoved) {
                         break;
@@ -396,11 +396,6 @@
 
     GridStackEngine.prototype.getDirtyNodes = function() {
         return _.filter(this.nodes, function(n) { return n._dirty; });
-    };
-    GridStackEngine.prototype.cleanOrphanClones = function() {
-        var orphans = _.remove(this.nodes, function (node) {
-            return !node.el || node.el.hasClass(phocas.views.dashboard.constants.WIDGET_CLONE_CLASS) || node.el.hasClass(phocas.views.dashboard.constants.GRID_WIDGET_CLONE_CLASS);
-        });
     };
 
     GridStackEngine.prototype.addNode = function(node, triggerAddEvent) {
@@ -476,7 +471,7 @@
             }));
 
         if (typeof clonedNode === 'undefined') {
-            return false;
+            return true;
         }
 
         clone.moveNode(clonedNode, x, y, width, height);
@@ -733,13 +728,11 @@
                         n.el.remove();
                     }
                 } else {
-                    if(n.el){
-                        n.el
-                            .attr('data-gs-x', n.x)
-                            .attr('data-gs-y', n.y)
-                            .attr('data-gs-width', n.width)
-                            .attr('data-gs-height', n.height);
-                    }
+                    n.el
+                        .attr('data-gs-x', n.x)
+                        .attr('data-gs-y', n.y)
+                        .attr('data-gs-width', n.width)
+                        .attr('data-gs-height', n.height);
                 }
             });
             self._updateStyles(maxHeight + 10);
@@ -832,7 +825,7 @@
             }
             this.dd
                 .on(trashZone, 'dropover', function(event, ui) {
-                    var el = $(ui.helper);
+                    var el = $(ui.draggable);
                     var node = el.data('_gridstack_node');
                     if (node._grid !== self) {
                         return;
@@ -841,7 +834,7 @@
                     self._setupRemovingTimeout(el);
                 })
                 .on(trashZone, 'dropout', function(event, ui) {
-                    var el = $(ui.helper);
+                    var el = $(ui.draggable);
                     var node = el.data('_gridstack_node');
                     if (node._grid !== self) {
                         return;
@@ -857,8 +850,7 @@
             var onDrag = function(event, ui) {
                 var el = draggingElement;
                 var node = el.data('_gridstack_node');
-                var eventCoordinates = event.hasOwnProperty('pageX') ? {left: event.pageX, top: event.pageY} : {left: draggingElement.offset().left, top: draggingElement.offset().top};
-                var pos = self.getCellFromPixel(eventCoordinates, true);
+                var pos = self.getCellFromPixel({left: event.pageX, top: event.pageY}, true);
                 var x = Math.max(0, pos.x);
                 var y = Math.max(0, pos.y);
                 if (!node._added) {
@@ -905,7 +897,7 @@
                 })
                 .on(self.container, 'dropover', function(event, ui) {
                     var offset = self.container.offset();
-                    var el = $(ui.helper);
+                    var el = $(ui.draggable);
                     var cellWidth = self.cellWidth();
                     var cellHeight = self.cellHeight();
                     var origNode = el.data('_gridstack_node');
@@ -922,7 +914,7 @@
                     el.on('drag', onDrag);
                 })
                 .on(self.container, 'dropout', function(event, ui) {
-                    var el = $(ui.helper);
+                    var el = $(ui.draggable);
                     if (!el.data('_gridstack_node')) {
                         return;
                     }
@@ -936,14 +928,12 @@
                 })
                 .on(self.container, 'drop', function(event, ui) {
                     self.placeholder.detach();
-                    //PHOCAS CHANGE: we want to use the helper all the time... (The Clone)
-                    var node = $(ui.helper).data('_gridstack_node');
+
+                    var node = $(ui.draggable).data('_gridstack_node');
                     node._grid = self;
-                    //TODO: maybe clone always?? pending test between GridLines:
-                    var el = ui.helper.hasClass(phocas.views.dashboard.constants.WIDGET_CLONE_CLASS) ? $(ui.helper).clone(false) : $(ui.draggable).clone(false);
-                    if(typeof node.id === 'undefined') node.id = el.attr('data-gs-id');
+                    var el = $(ui.draggable).clone(false);
                     el.data('_gridstack_node', node);
-                    var originalNode = $(ui.helper).data('_gridstack_node_orig');
+                    var originalNode = $(ui.draggable).data('_gridstack_node_orig');
                     if (typeof originalNode !== 'undefined' && typeof originalNode._grid !== 'undefined') {
                         originalNode._grid._triggerRemoveEvent();
                     }
@@ -974,8 +964,6 @@
                     $(ui.draggable).unbind('drag', onDrag);
                     $(ui.draggable).removeData('_gridstack_node');
                     $(ui.draggable).removeData('_gridstack_node_orig');
-                    self.grid.cleanOrphanClones();
-                    self._updateContainerHeight();
                     self.container.trigger('dropped', [originalNode, node]);
                 });
         }
@@ -1136,8 +1124,6 @@
     };
 
     GridStack.prototype._clearRemovingTimeout = function(el) {
-        if(el === null || typeof el === "undefined"){ return; }
-
         var node = $(el).data('_gridstack_node');
 
         if (!node._removeTimeout) {
@@ -1160,7 +1146,6 @@
             var y = Math.floor((ui.position.top + cellHeight / 2) / cellHeight);
             var width;
             var height;
-            var anotherPlaceholderExist = $('.ui-sortable-placeholder').length>0;
 
             if (event.type != 'drag') {
                 width = Math.round(ui.size.width / cellWidth);
@@ -1172,8 +1157,8 @@
                 node._prevYPix = ui.position.top;
                 Utils.updateScrollPosition(el[0], ui, distance);
                 if (el.data('inTrashZone') || x < 0 || x >= self.grid.width || y < 0 ||
-                    (!self.grid.float && y > self.grid.getGridHeight()) || anotherPlaceholderExist) {
-                    if (!node._temporaryRemoved || anotherPlaceholderExist) {
+                    (!self.grid.float && y > self.grid.getGridHeight())) {
+                    if (!node._temporaryRemoved) {
                         if (self.opts.removable === true) {
                             self._setupRemovingTimeout(el);
                         }
@@ -1216,7 +1201,7 @@
             var lastTriedHeight = typeof height !== 'undefined' ? height : node.lastTriedHeight;
             if (!self.grid.canMoveNode(node, x, y, width, height) ||
                 (node.lastTriedX === x && node.lastTriedY === y &&
-                    node.lastTriedWidth === lastTriedWidth && node.lastTriedHeight === lastTriedHeight)) {
+                node.lastTriedWidth === lastTriedWidth && node.lastTriedHeight === lastTriedHeight)) {
                 return;
             }
             node.lastTriedX = x;
@@ -1225,16 +1210,9 @@
             node.lastTriedHeight = height;
             self.grid.moveNode(node, x, y, width, height);
             self._updateContainerHeight();
-
-            if (event.type == 'resize')  {
-                $(event.target).trigger('gsresize', node);
-            }
         };
 
-        var onStartMoving = function (event, ui) {
-            if (event.type !== 'resizestart') {
-                self.container.css('min-height', self.grid.getGridHeight() * (self.opts.cellHeight) + ui.helper.height());
-            }
+        var onStartMoving = function(event, ui) {
             self.container.append(self.placeholder);
             var o = $(this);
             self.grid.cleanNodes();
@@ -1248,7 +1226,6 @@
                 .attr('data-gs-width', o.attr('data-gs-width'))
                 .attr('data-gs-height', o.attr('data-gs-height'))
                 .show();
-
             node.el = self.placeholder;
             node._beforeDragX = node.x;
             node._beforeDragY = node.y;
@@ -1263,11 +1240,8 @@
         };
 
         var onEndMoving = function(event, ui) {
-            self.grid.cleanOrphanClones();
-            self.container.css("min-height", "");
             var o = $(this);
             if (!o.data('_gridstack_node')) {
-                self._updateContainerHeight();
                 return;
             }
 
@@ -1304,7 +1278,7 @@
                     self.grid.addNode(node);
                 }
             }
-
+            self._updateContainerHeight();
             self._triggerChangeEvent(forceNotify);
 
             self.grid.endUpdate();
@@ -1320,12 +1294,6 @@
             if (event.type == 'resizestop') {
                 self.container.trigger('gsresizestop', o);
             }
-
-            // Phocas change
-            self.grid._packNodes();
-            self.grid._notify();
-            // End Phocas change
-            self._updateContainerHeight();
         };
 
         this.dd
@@ -1391,7 +1359,7 @@
     };
 
     GridStack.prototype.addWidget = function(el, x, y, width, height, autoPosition, minWidth, maxWidth,
-                                             minHeight, maxHeight, id) {
+        minHeight, maxHeight, id) {
         el = $(el);
         if (typeof x != 'undefined') { el.attr('data-gs-x', x); }
         if (typeof y != 'undefined') { el.attr('data-gs-y', y); }
@@ -1810,7 +1778,7 @@
         'end_update', 'endUpdate');
     GridStackEngine.prototype.can_be_placed_with_respect_to_height =
         obsolete(GridStackEngine.prototype.canBePlacedWithRespectToHeight,
-            'can_be_placed_with_respect_to_height', 'canBePlacedWithRespectToHeight');
+        'can_be_placed_with_respect_to_height', 'canBePlacedWithRespectToHeight');
     GridStack.prototype._trigger_change_event = obsolete(GridStack.prototype._triggerChangeEvent,
         '_trigger_change_event', '_triggerChangeEvent');
     GridStack.prototype._init_styles = obsolete(GridStack.prototype._initStyles,
